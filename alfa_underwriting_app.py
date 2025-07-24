@@ -4,43 +4,45 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import io
 import folium
+import tempfile
 from folium.plugins import MarkerCluster
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
-import os
 from datetime import datetime
+import os
 
 st.set_page_config(page_title="Underwriting Analyse", layout="wide")
 st.title("📊 Underwriting Analyse App")
 
-# Funktion til scatterplot m. trendlinje
+# Scatterplot med eller uden trendlinje (hvis x er dato)
 def make_scatter_with_trend(df, x, y, title):
     fig, ax = plt.subplots(figsize=(8, 4))
-    sns.regplot(data=df, x=x, y=y, ax=ax, scatter_kws={"s": 30}, line_kws={"color": "red"})
+    if pd.api.types.is_datetime64_any_dtype(df[x]):
+        sns.scatterplot(data=df, x=x, y=y, ax=ax)
+    else:
+        sns.regplot(data=df, x=x, y=y, ax=ax, scatter_kws={"s": 30}, line_kws={"color": "red"})
     ax.set_title(title)
     ax.set_xlabel(x)
     ax.set_ylabel(y)
     return fig
 
-# Funktion til kort fra lat/lng
+# Kort ud fra lat/lng
 def make_map(df, lat_col="Lat", lng_col="Lng"):
     df = df.dropna(subset=[lat_col, lng_col])
     if df.empty:
         return None
-
     m = folium.Map(location=[df[lat_col].mean(), df[lng_col].mean()], zoom_start=13)
     marker_cluster = MarkerCluster().add_to(m)
-
     for _, row in df.iterrows():
         folium.Marker(location=[row[lat_col], row[lng_col]]).add_to(marker_cluster)
-
-    map_path = "/mnt/data/map.html"
+    map_file = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
+    map_path = map_file.name
     m.save(map_path)
     return map_path
 
-# Funktion til kort fra centroid (resights)
+# Parse Centroid-streng til lat/lng
 def parse_centroid(centroid_str):
     try:
         coords = centroid_str.replace("POINT (", "").replace(")", "").split()
@@ -49,7 +51,7 @@ def parse_centroid(centroid_str):
     except:
         return None, None
 
-# Funktion til PDF-rapport
+# PDF-rapport generator
 def make_pdf_report(title, plot_buf, map_note=""):
     pdf_path = "/mnt/data/rapport.pdf"
     doc = SimpleDocTemplate(pdf_path, pagesize=A4)
@@ -75,7 +77,7 @@ def make_pdf_report(title, plot_buf, map_note=""):
     doc.build(elements)
     return pdf_path
 
-# App-start
+# App-layout
 uploaded_file = st.file_uploader("Upload Excel-fil", type=["xlsx"])
 file_type = st.selectbox("Vælg datakilde", ["-- Vælg --", "Resights (handler)", "ReData (lejeniveauer)"])
 
@@ -99,7 +101,6 @@ if uploaded_file and file_type != "-- Vælg --":
             fig.savefig(scatter_buf, format="png")
             pdf_btn = True
 
-            # Kort
             if all(col in df.columns for col in ["Lat", "Lng"]):
                 map_path = make_map(df)
                 if map_path:
@@ -120,7 +121,6 @@ if uploaded_file and file_type != "-- Vælg --":
             fig.savefig(scatter_buf, format="png")
             pdf_btn = True
 
-            # Parse centroid → lat/lng
             if "Centroid" in df.columns:
                 df["Lat"], df["Lng"] = zip(*df["Centroid"].map(parse_centroid))
                 map_path = make_map(df)
@@ -142,4 +142,3 @@ if uploaded_file and file_type != "-- Vælg --":
                     file_name="rapport.pdf",
                     mime="application/pdf"
                 )
-
