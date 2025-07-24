@@ -51,7 +51,7 @@ def parse_centroid(centroid_str):
     except:
         return None, None
 
-# PDF-rapport generator
+# PDF-rapport generator (bruger tempfile til billede!)
 def make_pdf_report(title, plot_buf, map_note=""):
     pdf_path = "/mnt/data/rapport.pdf"
     doc = SimpleDocTemplate(pdf_path, pagesize=A4)
@@ -64,9 +64,13 @@ def make_pdf_report(title, plot_buf, map_note=""):
     elements.append(Spacer(1, 0.4 * inch))
 
     elements.append(Paragraph("📈 Scatterplot med trendlinje", styles["Heading2"]))
-    img_path = "/mnt/data/scatter_temp.png"
-    with open(img_path, "wb") as f:
-        f.write(plot_buf.getvalue())
+
+    # GEM SOM TEMPORÆR FIL
+    scatter_img_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    scatter_img_file.write(plot_buf.getvalue())
+    scatter_img_file.close()
+    img_path = scatter_img_file.name
+
     elements.append(RLImage(img_path, width=6 * inch, height=3 * inch))
     elements.append(Spacer(1, 0.2 * inch))
 
